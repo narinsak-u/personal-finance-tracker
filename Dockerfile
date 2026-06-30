@@ -22,6 +22,7 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=builder /app/scripts ./scripts
 COPY --from=builder /app/drizzle ./drizzle
+RUN npm install drizzle-orm postgres
 USER nextjs
 EXPOSE 3000
 ENV PORT=3000
