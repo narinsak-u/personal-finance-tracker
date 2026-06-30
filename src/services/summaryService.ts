@@ -2,7 +2,7 @@ import { z, ZodError } from 'zod';
 import * as transactionRepository from '@/repositories/transactionRepository';
 import { summaryQuerySchema } from '@/schemas/transactionSchema';
 import { ValidationError } from '@/lib/errors';
-import { SummaryResponse } from '@/types/transaction';
+import { SummaryResponse, Category } from '@/types/transaction';
 
 function centsToDollars(cents: number): number {
   return cents / 100;
@@ -35,7 +35,7 @@ export async function getSummary(from: string, to: string): Promise<SummaryRespo
     netBalance: centsToDollars(totalIncomeCents - totalExpenseCents),
     byCategory: data.byCategory.map(item => ({
       type: item.type,
-      category: item.category as any,
+      category: item.category as Category,
       total: centsToDollars(item.totalCents),
     })),
   };

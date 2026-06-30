@@ -1,5 +1,7 @@
 import * as summaryService from '@/services/summaryService';
 import * as transactionService from '@/services/transactionService';
+
+export const dynamic = 'force-dynamic';
 import SummaryCards from '@/components/SummaryCards';
 import CategoryBreakdown from '@/components/CategoryBreakdown';
 import Dashboard from '@/components/Dashboard';

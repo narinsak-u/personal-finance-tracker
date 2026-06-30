@@ -53,13 +53,13 @@ export async function update(id: string, input: UpdateTransactionInput): Promise
 
     const effectiveType = validated.type ?? existing.type;
     const effectiveCategory = validated.category ?? existing.category;
-    const validCategories = effectiveType === 'income'
+    const validCategories: string[] = effectiveType === 'income'
       ? [...INCOME_CATEGORIES]
       : [...EXPENSE_CATEGORIES];
 
-    if (!validCategories.includes(effectiveCategory as any)) {
+    if (!validCategories.includes(effectiveCategory)) {
       throw new ValidationError([{
-        code: 'custom' as any,
+        code: z.ZodIssueCode.custom,
         path: ['category'],
         message: `Category "${effectiveCategory}" is not valid for type "${effectiveType}"`,
       }]);
