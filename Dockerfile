@@ -36,4 +36,4 @@ USER nextjs
 
 EXPOSE 3000
 
-CMD ["sh", "-c", "node scripts/migrate.mjs && exec node server.js"]
+CMD ["sh", "-c", "node scripts/migrate.mjs && node scripts/seed.mjs && exec node server.js"]
