@@ -1,11 +1,14 @@
 "use client";
 
-import { memo, useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
-import { apiGet, apiDelete, ApiError } from "@/lib/api-client";
+import { memo, useState } from "react";
+import {
+  useTransactions,
+  useDeleteTransaction,
+} from "@/hooks/use-transactions";
+import { useEditingStore } from "@/stores/editing-store";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { EXPENSE_CATEGORIES, INCOME_CATEGORIES } from "@/lib/categories";
-import type { Transaction, PaginatedResult } from "@/types/transaction";
+import type { Transaction } from "@/types/transaction";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -32,20 +35,15 @@ import {
 } from "@/components/ui/dialog";
 import Pagination from "@/components/ui/pagination";
 
-interface Props {
-  initialTransactions: PaginatedResult<Transaction>;
-  onEdit: (t: Transaction) => void;
-}
-
 const ALL_CATEGORIES = [
   ...new Set([...EXPENSE_CATEGORIES, ...INCOME_CATEGORIES]),
 ];
-const FILTER_DEBOUNCE_MS = 200;
 
-function TransactionList({ initialTransactions, onEdit }: Props) {
-  const router = useRouter();
-  const [result, setResult] = useState(initialTransactions);
-  const [error, setError] = useState<string | null>(null);
+function TransactionList() {
+  const setEditing = useEditingStore((s) => s.setEditing);
+  const deleteMutation = useDeleteTransaction();
+
+  const [page, setPage] = useState(1);
   const [filterType, setFilterType] = useState("");
   const [filterCategory, setFilterCategory] = useState("");
   const [filterFrom, setFilterFrom] = useState<Date | undefined>();
@@ -54,43 +52,40 @@ function TransactionList({ initialTransactions, onEdit }: Props) {
   const [toOpen, setToOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Transaction | null>(null);
 
-  function fetchPage(page: number) {
-    const params = new URLSearchParams();
-    if (filterType) params.set("type", filterType);
-    if (filterCategory) params.set("category", filterCategory);
-    if (filterFrom) params.set("from", format(filterFrom, "yyyy-MM-dd"));
-    if (filterTo) params.set("to", format(filterTo, "yyyy-MM-dd"));
+  const {
+    data: result,
+    isPending,
+    error,
+  } = useTransactions({
+    page,
+    pageSize: 10,
+    type: filterType || undefined,
+    category: filterCategory || undefined,
+    from: filterFrom ? format(filterFrom, "yyyy-MM-dd") : undefined,
+    to: filterTo ? format(filterTo, "yyyy-MM-dd") : undefined,
+  });
 
-    params.set("page", String(page));
-    params.set("pageSize", "10");
-
-    apiGet<PaginatedResult<Transaction>>(`/api/transactions?${params}`)
-      .then((data) => {
-        setResult(data);
-        setError(null);
-      })
-      .catch((err) => {
-        setError(
-          err instanceof Error ? err.message : "Failed to load transactions",
-        );
-      });
+  function handleFilterChange() {
+    setPage(1);
   }
 
-  useEffect(() => {
-    fetchPage(1);
-  }, [filterType, filterCategory, filterFrom, filterTo]);
+  function handleEdit(t: Transaction) {
+    setEditing(t);
+    requestAnimationFrame(() => {
+      document.getElementById("transaction-form")?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    });
+  }
 
   async function confirmDelete() {
     if (!deleteTarget) return;
     try {
-      await apiDelete(`/api/transactions/${deleteTarget.id}`);
+      await deleteMutation.mutateAsync(deleteTarget.id);
       setDeleteTarget(null);
-      router.refresh();
-    } catch (err) {
+    } catch {
       setDeleteTarget(null);
-      const msg =
-        err instanceof ApiError ? err.message : "Failed to delete transaction";
-      setError(msg);
     }
   }
 
@@ -103,7 +98,10 @@ function TransactionList({ initialTransactions, onEdit }: Props) {
         <div className="flex flex-wrap gap-2 mb-4">
           <Select
             value={filterType || "all"}
-            onValueChange={(v) => setFilterType(v === "all" ? "" : (v ?? ""))}
+            onValueChange={(v) => {
+              setFilterType(v === "all" ? "" : (v ?? ""));
+              handleFilterChange();
+            }}
           >
             <SelectTrigger className="w-32">
               <SelectValue placeholder="All types" />
@@ -116,9 +114,10 @@ function TransactionList({ initialTransactions, onEdit }: Props) {
           </Select>
           <Select
             value={filterCategory || "all"}
-            onValueChange={(v) =>
-              setFilterCategory(v === "all" ? "" : (v ?? ""))
-            }
+            onValueChange={(v) => {
+              setFilterCategory(v === "all" ? "" : (v ?? ""));
+              handleFilterChange();
+            }}
           >
             <SelectTrigger className="w-40">
               <SelectValue placeholder="All categories" />
@@ -152,6 +151,7 @@ function TransactionList({ initialTransactions, onEdit }: Props) {
                 selected={filterFrom}
                 onSelect={(d) => {
                   setFilterFrom(d ?? undefined);
+                  handleFilterChange();
                   setFromOpen(false);
                 }}
               />
@@ -177,16 +177,23 @@ function TransactionList({ initialTransactions, onEdit }: Props) {
                 selected={filterTo}
                 onSelect={(d) => {
                   setFilterTo(d ?? undefined);
+                  handleFilterChange();
                   setToOpen(false);
                 }}
               />
             </PopoverContent>
           </Popover>
         </div>
-        {error && <p className="text-sm text-destructive mb-3">{error}</p>}
-        {result.data.length === 0 ? (
+        {error && (
+          <p className="text-sm text-destructive mb-3">
+            {error instanceof Error ? error.message : "Failed to load"}
+          </p>
+        )}
+        {isPending && !result ? (
+          <p className="text-muted-foreground text-sm">Loading…</p>
+        ) : result && result.data.length === 0 ? (
           <p className="text-muted-foreground text-sm">No transactions found</p>
-        ) : (
+        ) : result ? (
           <ul className="divide-y">
             {result.data.map((t) => (
               <li key={t.id} className="py-3 flex items-center justify-between">
@@ -210,7 +217,11 @@ function TransactionList({ initialTransactions, onEdit }: Props) {
                   )}
                 </div>
                 <div className="flex gap-2">
-                  <Button variant="ghost" size="sm" onClick={() => onEdit(t)}>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleEdit(t)}
+                  >
                     Edit
                   </Button>
                   <Button
@@ -225,12 +236,14 @@ function TransactionList({ initialTransactions, onEdit }: Props) {
               </li>
             ))}
           </ul>
+        ) : null}
+        {result && result.totalPages > 1 && (
+          <Pagination
+            page={result.page}
+            totalPages={result.totalPages}
+            onPageChange={setPage}
+          />
         )}
-        <Pagination
-          page={result.page}
-          totalPages={result.totalPages}
-          onPageChange={fetchPage}
-        />
       </CardContent>
       <Dialog
         open={deleteTarget !== null}
@@ -253,7 +266,12 @@ function TransactionList({ initialTransactions, onEdit }: Props) {
             >
               Cancel
             </Button>
-            <Button variant="destructive" size="sm" onClick={confirmDelete}>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={confirmDelete}
+              disabled={deleteMutation.isPending}
+            >
               Delete
             </Button>
           </div>

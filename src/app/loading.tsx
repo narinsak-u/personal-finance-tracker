@@ -8,10 +8,10 @@ export default function Loading() {
         <div className="h-20 rounded-lg border bg-card" />
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
-        <div className="h-[360px] rounded-lg border bg-card" />
-        <div className="h-[360px] rounded-lg border bg-card" />
+        <div className="h-90 rounded-lg border bg-card" />
+        <div className="h-90 rounded-lg border bg-card" />
       </div>
-      <div className="h-[400px] rounded-lg border bg-card" />
+      <div className="h-100 rounded-lg border bg-card" />
     </main>
   );
 }

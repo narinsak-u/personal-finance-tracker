@@ -1,8 +1,8 @@
 # Personal Finance Tracker
 
-A full-stack web application for recording and tracking personal income and expense transactions. Features include transaction CRUD, filtering by type/category/date range, real-time summary statistics, and per-category breakdown visualizations.
+A full-stack web application for recording and tracking personal income and expense transactions. Features include transaction CRUD with pagination, filtering by type/category/date range, server-cached summaries via TanStack Query, donut chart category breakdown, and a delete confirmation dialog.
 
-Built with a clean layered architecture (Route Handler → Service → Repository → Database) to maintain separation of concerns.
+Built with a clean layered architecture (Route Handler → Service → Repository → Database).
 
 ## Tech Stack
 
@@ -13,10 +13,11 @@ Built with a clean layered architecture (Route Handler → Service → Repositor
 | **Database** | PostgreSQL 16 |
 | **ORM** | Drizzle ORM v0.45 |
 | **Validation** | Zod v4 |
+| **Server State** | TanStack Query v5 |
+| **Global State** | Zustand |
 | **Styling** | Tailwind CSS v4 + shadcn/ui (`@base-ui/react`) |
-| **Charts** | Recharts |
+| **Charts** | Recharts (code-split via `next/dynamic`) |
 | **Testing** | Vitest v4 |
-| **Container** | Docker + Docker Compose |
 
 ## Project Structure
 
@@ -26,49 +27,53 @@ personal-finance-tracker/
 │   ├── app/
 │   │   ├── api/
 │   │   │   ├── transactions/
-│   │   │   │   ├── route.ts           # GET (list), POST (create)
+│   │   │   │   ├── route.ts           # GET (list + pagination), POST (create)
 │   │   │   │   └── [id]/
 │   │   │   │       └── route.ts       # GET, PUT, DELETE by id
 │   │   │   └── summary/
-│   │   │       └── route.ts           # GET (summary by date range)
+│   │   │       └── route.ts           # GET (totals + breakdown by date range)
 │   │   ├── layout.tsx
-│   │   ├── page.tsx                   # Dashboard page (server component)
-│   │   └── globals.css
+│   │   ├── page.tsx                   # SSR with TanStack Query hydration
+│   │   ├── loading.tsx                # Skeleton loading screen
+│   │   └── globals.css                # Tailwind v4 + @theme config
 │   ├── components/
-│   │   ├── Dashboard.tsx              # Main dashboard (client)
+│   │   ├── Dashboard.tsx              # Layout shell (no state)
 │   │   ├── SummaryCards.tsx            # Income/expense/net cards
-│   │   ├── TransactionForm.tsx         # Add/edit transaction form
-│   │   ├── TransactionList.tsx         # Transaction table with filters
-│   │   ├── CategoryBreakdown.tsx       # Bar chart by category
+│   │   ├── TransactionForm.tsx         # Add/edit form (Zustand + mutations)
+│   │   ├── TransactionList.tsx         # Paginated list with filters (queries)
+│   │   ├── CategoryBreakdown.tsx       # Donut charts (code-split)
+│   │   ├── providers.tsx               # QueryClientProvider
 │   │   └── ui/                         # shadcn/ui primitives
-│   │       ├── button.tsx
-│   │       ├── card.tsx
-│   │       ├── input.tsx
-│   │       ├── select.tsx
-│   │       ├── badge.tsx
-│   │       ├── calendar.tsx
-│   │       ├── chart.tsx
-│   │       ├── label.tsx
-│   │       ├── popover.tsx
-│   │       └── radio-group.tsx
+│   │       ├── button, card, input, select
+│   │       ├── badge, label, radio-group
+│   │       ├── calendar, chart, dialog
+│   │       ├── pagination, popover
 │   ├── db/
 │   │   ├── client.ts                  # PostgreSQL connection pool
 │   │   └── schema.ts                  # Drizzle schema + enums
+│   ├── hooks/
+│   │   ├── use-transactions.ts        # useTransactions + CRUD mutations
+│   │   └── use-summary.ts             # useSummary query
 │   ├── lib/
-│   │   ├── api-client.ts              # Client-side fetch wrappers
-│   │   ├── errors.ts                  # ValidationError, NotFoundError
+│   │   ├── api-client.ts              # Unified apiRequest with AbortSignal
+│   │   ├── categories.ts              # Single source of categories + colors
+│   │   ├── errors.ts                  # AppError, ValidationError, NotFoundError
 │   │   ├── format.ts                  # Currency/date formatters
-│   │   ├── http.ts                    # handleError() for route handlers
+│   │   ├── http.ts                    # handleError() -> AppError.toResponse()
+│   │   ├── query-client.ts            # TanStack Query client factory
+│   │   ├── query-keys.ts              # Query key factory
 │   │   └── utils.ts                   # cn() (clsx + tailwind-merge)
 │   ├── repositories/
-│   │   └── transactionRepository.ts   # Drizzle queries + row mapper
+│   │   └── transactionRepository.ts   # Drizzle queries + row mapper ($inferSelect)
 │   ├── schemas/
-│   │   └── transactionSchema.ts       # Zod v4 schemas
+│   │   └── transactionSchema.ts       # Zod v4 schemas (from<=to validated)
 │   ├── services/
 │   │   ├── transactionService.ts      # Transaction business logic
 │   │   └── summaryService.ts          # Summary aggregation logic
+│   ├── stores/
+│   │   └── editing-store.ts           # Zustand store for editing state
 │   └── types/
-│       └── transaction.ts             # Domain types + constants
+│       └── transaction.ts             # Domain types + PaginatedResult
 ├── tests/
 │   ├── lib/format.test.ts
 │   ├── schemas/transactionSchema.test.ts
@@ -78,12 +83,9 @@ personal-finance-tracker/
 ├── drizzle/                           # Generated migrations
 ├── scripts/
 │   └── migrate.mjs                    # Runtime migration script
-├── public/
+├── AGENTS.md                         # Agentic coding instructions
 ├── docker-compose.yml
 ├── Dockerfile
-├── drizzle.config.ts
-├── vitest.config.ts
-├── tsconfig.json
 └── package.json
 ```
 
@@ -93,31 +95,35 @@ personal-finance-tracker/
 Route Handler (HTTP) → Service (Business Logic) → Repository (Data Access) → Drizzle ORM → PostgreSQL
 ```
 
-- **Route Handlers** (`src/app/api/`): Parse HTTP requests, delegate to services, map errors via `handleError()`. Contains zero business logic.
-- **Services** (`src/services/`): Zod validation, cents conversion (stored as integers), domain rules, cross-field validation.
-- **Repositories** (`src/repositories/`): Raw Drizzle queries, row-to-domain mapping with `rowToTransaction()`.
+- **Route Handlers** (`src/app/api/`): Parse HTTP requests, delegate to services, map errors via `handleError()`. No business logic.
+- **Services** (`src/services/`): Zod validation, cross-field rules (type↔category), error handling. Delegate data access to repositories.
+- **Repositories** (`src/repositories/`): Raw Drizzle queries, `$inferSelect` row typing, `rowToTransaction()` mapper.
 - **DB** (`src/db/`): Schema definitions (`schema.ts`) and connection pool (`client.ts`).
+- **Hooks** (`src/hooks/`): TanStack Query wrappers with cache invalidation after mutations.
+- **Stores** (`src/stores/`): Zustand stores for cross-component state (`editingTransaction`).
 
-All files are under 200 lines.
+Error handling: `AppError` base class with `toResponse()`; `handleError()` collapses to ~3 lines.
 
 ## Database Schema
 
-The `transactions` table stores amounts in **cents** (integer) to avoid floating-point issues:
+The `transactions` table stores amounts as `numeric(12, 2)` (supports decimals):
 
 | Column | Type | Notes |
 |--------|------|-------|
 | `id` | UUID | Auto-generated primary key |
 | `type` | enum | `income` or `expense` |
-| `amount` | integer | Stored in cents |
-| `category` | text | Validated against per-type categories |
+| `amount` | numeric(12,2) | 10 digits precision, 2 scale |
+| `category` | text | Validated via discriminated union |
 | `date` | date | Transaction date |
 | `note` | text | Optional, nullable |
 | `created_at` | timestamp | Auto-set |
-| `updated_at` | timestamp | Auto-set |
+| `updated_at` | timestamp | Auto-set, bumped on update |
 
 Constraint: `amount > 0`
 
 ### Categories
+
+Defined in `src/lib/categories.ts` (single source of truth):
 
 | Type | Categories |
 |------|-----------|
@@ -128,12 +134,12 @@ Constraint: `amount > 0`
 
 | Method | Path | Query Params | Description |
 |--------|------|-------------|-------------|
-| GET | `/api/transactions` | `type`, `category`, `from`, `to` | List transactions (optional filters) |
+| GET | `/api/transactions` | `type`, `category`, `from`, `to`, `page`, `pageSize` | Paginated transaction list |
 | POST | `/api/transactions` | — | Create a transaction |
 | GET | `/api/transactions/:id` | — | Get a single transaction |
 | PUT | `/api/transactions/:id` | — | Update a transaction |
 | DELETE | `/api/transactions/:id` | — | Delete a transaction |
-| GET | `/api/summary` | `from`, `to` (required) | Summary: totals + breakdown by category |
+| GET | `/api/summary` | `from`, `to` | Totals + category breakdown |
 
 ### Request/Response Examples
 
@@ -147,7 +153,17 @@ Constraint: `amount > 0`
   "note": "Lunch"
 }
 ```
-*Amounts are sent/received in dollars; stored as cents internally.*
+
+**GET /api/transactions?page=1&pageSize=10**
+```json
+{
+  "data": [ ... ],
+  "total": 42,
+  "page": 1,
+  "pageSize": 10,
+  "totalPages": 5
+}
+```
 
 **GET /api/summary?from=2026-01-01&to=2026-12-31**
 ```json
@@ -175,55 +191,31 @@ Constraint: `amount > 0`
 ### Using Docker (recommended)
 
 ```bash
-# 1. Clone and enter the project
 cd personal-finance-tracker
-
-# 2. Create environment file
 cp .env.example .env
-
-# 3. Start services (PostgreSQL + app)
 docker compose up --build
 
-# 4. In another terminal, run migrations
-docker compose exec app npm run db:migrate
+# In another terminal, run migrations
+docker compose exec app node scripts/migrate.mjs
 
-# 5. Open http://localhost:3000
+# Open http://localhost:3000
 ```
 
-### Local Development (without Docker)
+### Local Development
 
 ```bash
-# 1. Install dependencies
 npm install
-
-# 2. Start PostgreSQL (or use Docker for just the DB)
-docker compose up postgres -d
-
-# 3. Create environment file
+docker compose up postgres -d     # or use local PostgreSQL
 cp .env.example .env
-
-# 4. Push schema to database
-npm run db:push
-
-# 5. Start dev server
-npm run dev
-
-# 6. Open http://localhost:3000
+npm run db:push                    # push schema (dev only)
+npm run dev                        # starts with webpack (Turbopack has a Windows CSS bug)
 ```
-
-## Environment Variables
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `DATABASE_URL` | `postgresql://postgres:postgres@localhost:5432/finance` | PostgreSQL connection string |
-
-Copy `.env.example` to `.env` and adjust as needed.
 
 ## Available Commands
 
 | Command | Description |
 |---------|-------------|
-| `npm run dev` | Start Next.js dev server |
+| `npm run dev` | Start dev server (webpack) |
 | `npm run build` | Production build |
 | `npm run start` | Start production server |
 | `npm run lint` | Run ESLint (flat config) |
@@ -248,7 +240,17 @@ Tests are written with Vitest (globals enabled — no imports needed) and run in
 | Test File | What It Tests |
 |-----------|--------------|
 | `tests/lib/format.test.ts` | Currency and date formatting |
-| `tests/schemas/transactionSchema.test.ts` | Zod validation (create, update, filters, summary) |
+| `tests/schemas/transactionSchema.test.ts` | Zod validation (create, update, filters, summary, date ordering) |
 | `tests/repositories/transactionRepository.test.ts` | CRUD queries, row-to-domain mapping |
-| `tests/services/transactionService.test.ts` | Business logic, cents conversion, error handling |
+| `tests/services/transactionService.test.ts` | Business logic, cross-field validation, error handling |
 | `tests/services/summaryService.test.ts` | Summary aggregation, edge cases |
+
+## State Management
+
+- **Server state**: TanStack Query v5 — queries (`useTransactions`, `useSummary`) and mutations (`useCreateTransaction`, `useUpdateTransaction`, `useDeleteTransaction`) with automatic cache invalidation on write operations.
+- **Global UI state**: Zustand store (`useEditingStore`) for the currently editing transaction — both `TransactionForm` and `TransactionList` read/write the store directly, eliminating prop drilling through `Dashboard`.
+- **Page-level SSR**: Server-side prefetch + `HydrationBoundary` seeds the query cache so client components render hydrated on first load.
+
+## Agentic Coding
+
+This repository includes `AGENTS.md` with conventions for agentic coding tools (build commands, code style, architecture rules, testing patterns). Follow it when working with the codebase.

@@ -1,10 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { apiPost, apiPut } from "@/lib/api-client";
+import { format } from "date-fns";
 import { EXPENSE_CATEGORIES, INCOME_CATEGORIES } from "@/lib/categories";
-import type { Transaction } from "@/types/transaction";
+import type { Category } from "@/lib/categories";
+import { useEditingStore } from "@/stores/editing-store";
+import {
+  useCreateTransaction,
+  useUpdateTransaction,
+} from "@/hooks/use-transactions";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -24,15 +28,13 @@ import {
 import { Calendar } from "@/components/ui/calendar";
 import { CalendarIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { format } from "date-fns";
 
-interface Props {
-  editingTransaction: Transaction | null;
-  onDone: () => void;
-}
+function TransactionFormInner() {
+  const editingTransaction = useEditingStore((s) => s.editingTransaction);
+  const setEditing = useEditingStore((s) => s.setEditing);
+  const createMutation = useCreateTransaction();
+  const updateMutation = useUpdateTransaction();
 
-export default function TransactionForm({ editingTransaction, onDone }: Props) {
-  const router = useRouter();
   const [type, setType] = useState<"income" | "expense">(
     editingTransaction?.type ?? "expense",
   );
@@ -79,27 +81,28 @@ export default function TransactionForm({ editingTransaction, onDone }: Props) {
     const body = {
       type,
       amount: parsedAmount,
-      category,
+      category: category as Category,
       date: format(date, "yyyy-MM-dd"),
       note: note || undefined,
     };
 
     try {
       if (editingTransaction) {
-        await apiPut(`/api/transactions/${editingTransaction.id}`, body);
+        await updateMutation.mutateAsync({
+          id: editingTransaction.id,
+          ...body,
+        });
+        setEditing(null);
       } else {
-        await apiPost("/api/transactions", body);
-      }
-      router.refresh();
-      if (editingTransaction) {
-        onDone();
-      } else {
+        await createMutation.mutateAsync(body);
         resetForm();
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
     }
   }
+
+  const isPending = createMutation.isPending || updateMutation.isPending;
 
   return (
     <Card id="transaction-form" className="mb-6 border shadow-sm">
@@ -235,15 +238,24 @@ export default function TransactionForm({ editingTransaction, onDone }: Props) {
           </div>
 
           <div className="flex gap-2 pt-1">
-            <Button type="submit" className="flex-1 sm:flex-none" disabled={isSubmitDisabled}>
-              {editingTransaction ? "Update Transaction" : "Add Transaction"}
+            <Button
+              type="submit"
+              className="flex-1 sm:flex-none"
+              disabled={isSubmitDisabled || isPending}
+            >
+              {isPending
+                ? "Saving…"
+                : editingTransaction
+                  ? "Update Transaction"
+                  : "Add Transaction"}
             </Button>
             {editingTransaction && (
               <Button
                 type="button"
                 variant="outline"
-                onClick={onDone}
+                onClick={() => setEditing(null)}
                 className="flex-1 sm:flex-none"
+                disabled={isPending}
               >
                 Cancel
               </Button>
@@ -253,4 +265,9 @@ export default function TransactionForm({ editingTransaction, onDone }: Props) {
       </CardContent>
     </Card>
   );
+}
+
+export default function TransactionForm() {
+  const editingTransaction = useEditingStore((s) => s.editingTransaction);
+  return <TransactionFormInner key={editingTransaction?.id ?? "new"} />;
 }
