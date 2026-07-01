@@ -38,7 +38,7 @@ export default async function Home() {
 
   const queryClient = getQueryClient()
 
-  await Promise.all([
+  await Promise.allSettled([
     queryClient.prefetchQuery({
       queryKey: summaryKeys.range(from, to),
       queryFn: () => summaryService.getSummary(from, to),
@@ -49,7 +49,19 @@ export default async function Home() {
     }),
   ])
 
-  const summary = await summaryService.getSummary(from, to)
+  let summary
+  try {
+    summary = await summaryService.getSummary(from, to)
+  } catch {
+    summary = {
+      from,
+      to,
+      totalIncome: 0,
+      totalExpense: 0,
+      netBalance: 0,
+      byCategory: [],
+    }
+  }
 
   return (
     <HydrationBoundary state={dehydrate(queryClient)}>
