@@ -4,6 +4,8 @@ A full-stack web application for recording and tracking personal income and expe
 
 Built with a clean layered architecture (Route Handler → Service → Repository → Database).
 
+![Screenshot](public/Screenshot.png)
+
 ## Tech Stack
 
 | Layer | Technology |
@@ -141,44 +143,6 @@ Defined in `src/lib/categories.ts` (single source of truth):
 | DELETE | `/api/transactions/:id` | — | Delete a transaction |
 | GET | `/api/summary` | `from`, `to` | Totals + category breakdown |
 
-### Request/Response Examples
-
-**POST /api/transactions**
-```json
-{
-  "type": "expense",
-  "amount": 25.50,
-  "category": "food",
-  "date": "2026-07-01",
-  "note": "Lunch"
-}
-```
-
-**GET /api/transactions?page=1&pageSize=10**
-```json
-{
-  "data": [ ... ],
-  "total": 42,
-  "page": 1,
-  "pageSize": 10,
-  "totalPages": 5
-}
-```
-
-**GET /api/summary?from=2026-01-01&to=2026-12-31**
-```json
-{
-  "from": "2026-01-01",
-  "to": "2026-12-31",
-  "totalIncome": 5000.00,
-  "totalExpense": 1250.00,
-  "netBalance": 3750.00,
-  "byCategory": [
-    { "type": "expense", "category": "food", "total": 500.00 },
-    { "type": "income", "category": "salary", "total": 5000.00 }
-  ]
-}
-```
 
 ## Prerequisites
 
@@ -202,6 +166,7 @@ docker compose up --build          # runs migrate + seed (if empty) + app
 npm install
 docker compose up postgres -d     # or use local PostgreSQL
 cp .env.example .env
+npm run db:migrate                 # run pending migrations
 npm run db:push                    # push schema (dev only)
 npm run db:seed                    # seed sample data (skips if already seeded)
 npm run dev                        # starts with webpack (Turbopack has a Windows CSS bug)
@@ -229,25 +194,3 @@ npm run dev                        # starts with webpack (Turbopack has a Window
 npx vitest run tests/services/transactionService.test.ts
 npx vitest run -t "test name pattern"
 ```
-
-## Testing
-
-Tests are written with Vitest (globals enabled — no imports needed) and run in a Node environment (no jsdom). The test suite covers:
-
-| Test File | What It Tests |
-|-----------|--------------|
-| `tests/lib/format.test.ts` | Currency and date formatting |
-| `tests/schemas/transactionSchema.test.ts` | Zod validation (create, update, filters, summary, date ordering) |
-| `tests/repositories/transactionRepository.test.ts` | CRUD queries, row-to-domain mapping |
-| `tests/services/transactionService.test.ts` | Business logic, cross-field validation, error handling |
-| `tests/services/summaryService.test.ts` | Summary aggregation, edge cases |
-
-## State Management
-
-- **Server state**: TanStack Query v5 — queries (`useTransactions`, `useSummary`) and mutations (`useCreateTransaction`, `useUpdateTransaction`, `useDeleteTransaction`) with automatic cache invalidation on write operations.
-- **Global UI state**: Zustand store (`useEditingStore`) for the currently editing transaction — both `TransactionForm` and `TransactionList` read/write the store directly, eliminating prop drilling through `Dashboard`.
-- **Page-level SSR**: Server-side prefetch + `HydrationBoundary` seeds the query cache so client components render hydrated on first load.
-
-## Agentic Coding
-
-This repository includes `AGENTS.md` with conventions for agentic coding tools (build commands, code style, architecture rules, testing patterns). Follow it when working with the codebase.
