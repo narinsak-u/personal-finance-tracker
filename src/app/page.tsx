@@ -30,11 +30,8 @@ const CategoryBreakdown = dynamicImport(
 )
 
 export default async function Home() {
-  const now = new Date()
-  const from = new Date(now.getFullYear(), now.getMonth(), 1)
-    .toISOString()
-    .split("T")[0]
-  const to = now.toISOString().split("T")[0]
+  const to = new Date().toISOString().split("T")[0]
+  const from = "2000-01-01"
 
   const queryClient = getQueryClient()
 
