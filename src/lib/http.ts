@@ -1,21 +1,11 @@
-import { NextResponse } from 'next/server';
-import { ValidationError, NotFoundError } from './errors';
+import { NextResponse } from "next/server"
+import { AppError } from "./errors"
 
 export function handleError(e: unknown): NextResponse {
-  if (e instanceof ValidationError) {
-    return NextResponse.json(
-      { error: 'Validation failed', details: e.details },
-      { status: 400 },
-    );
+  if (e instanceof AppError) {
+    return e.toResponse()
   }
-  if (e instanceof NotFoundError) {
-    return NextResponse.json(
-      { error: e.message },
-      { status: 404 },
-    );
-  }
-  return NextResponse.json(
-    { error: 'Internal server error' },
-    { status: 500 },
-  );
+  
+  console.error(e)
+  return NextResponse.json({ error: "Internal server error" }, { status: 500 })
 }

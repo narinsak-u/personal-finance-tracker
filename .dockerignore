@@ -1,6 +1,14 @@
 node_modules
-.next
 .git
+.next
 .env
-tests
+.env.*
+*.md
+.DS_Store
 coverage
+tests
+.vscode
+.idea
+*.log
+Dockerfile
+.dockerignore

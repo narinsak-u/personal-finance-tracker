@@ -1,36 +1,60 @@
-export async function apiGet<T>(path: string): Promise<T> {
-  const res = await fetch(path);
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error || 'Request failed');
-  return data as T;
-}
-
-export async function apiPost<T>(path: string, body: unknown): Promise<T> {
-  const res = await fetch(path, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error || 'Request failed');
-  return data as T;
-}
-
-export async function apiPut<T>(path: string, body: unknown): Promise<T> {
-  const res = await fetch(path, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error || 'Request failed');
-  return data as T;
-}
-
-export async function apiDelete(path: string): Promise<void> {
-  const res = await fetch(path, { method: 'DELETE' });
-  if (!res.ok) {
-    const data = await res.json();
-    throw new Error(data.error || 'Request failed');
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly details?: unknown,
+  ) {
+    super(message)
+    this.name = "ApiError"
   }
+}
+
+interface ApiRequestOptions {
+  method?: "GET" | "POST" | "PUT" | "DELETE"
+  body?: unknown
+  signal?: AbortSignal
+}
+
+export async function apiRequest<T>(
+  path: string,
+  options: ApiRequestOptions = {},
+): Promise<T> {
+  const { method = "GET", body, signal } = options
+  const res = await fetch(path, {
+    method,
+    signal,
+    headers: body !== undefined ? { "Content-Type": "application/json" } : undefined,
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  })
+
+  const contentType = res.headers.get("content-type") ?? ""
+  let data: unknown
+  if (contentType.includes("application/json")) {
+    data = await res.json()
+  } else if (res.status !== 204) {
+    const text = await res.text()
+    if (text) throw new ApiError(text, res.status)
+  }
+
+  if (!res.ok) {
+    const payload = data as { error?: string; details?: unknown } | undefined
+    throw new ApiError(payload?.error ?? "Request failed", res.status, payload?.details)
+  }
+  return data as T
+}
+
+export function apiGet<T>(path: string, signal?: AbortSignal): Promise<T> {
+  return apiRequest<T>(path, { signal })
+}
+
+export function apiPost<T>(path: string, body: unknown): Promise<T> {
+  return apiRequest<T>(path, { method: "POST", body })
+}
+
+export function apiPut<T>(path: string, body: unknown): Promise<T> {
+  return apiRequest<T>(path, { method: "PUT", body })
+}
+
+export function apiDelete(path: string, signal?: AbortSignal): Promise<void> {
+  return apiRequest<void>(path, { method: "DELETE", signal })
 }

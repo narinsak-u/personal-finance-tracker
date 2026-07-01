@@ -16,13 +16,13 @@ beforeEach(() => {
 });
 
 describe('create', () => {
-  it('calls repo with cents-converted amount', async () => {
+  it('calls repo with amount directly', async () => {
     vi.mocked(transactionRepository.insert).mockResolvedValue(mockTransaction);
     await transactionService.create({
       type: 'expense', amount: 25.50, category: 'food', date: '2026-06-30', note: 'lunch',
     });
     expect(transactionRepository.insert).toHaveBeenCalledWith({
-      type: 'expense', amountCents: 2550, category: 'food', date: '2026-06-30', note: 'lunch',
+      type: 'expense', amount: 25.50, category: 'food', date: '2026-06-30', note: 'lunch',
     });
   });
 
@@ -34,23 +34,23 @@ describe('create', () => {
     expect(result).toEqual(mockTransaction);
   });
 
-  it('converts 0.01 dollars to 1 cent', async () => {
+  it('passes 0.01 amount directly', async () => {
     vi.mocked(transactionRepository.insert).mockResolvedValue(mockTransaction);
     await transactionService.create({
       type: 'expense', amount: 0.01, category: 'food', date: '2026-06-30',
     });
     expect(transactionRepository.insert).toHaveBeenCalledWith(
-      expect.objectContaining({ amountCents: 1 }),
+      expect.objectContaining({ amount: 0.01 }),
     );
   });
 
-  it('converts 100 dollars to 10000 cents', async () => {
+  it('passes 100 amount directly', async () => {
     vi.mocked(transactionRepository.insert).mockResolvedValue(mockTransaction);
     await transactionService.create({
       type: 'income', amount: 100, category: 'salary', date: '2026-06-30',
     });
     expect(transactionRepository.insert).toHaveBeenCalledWith(
-      expect.objectContaining({ amountCents: 10000 }),
+      expect.objectContaining({ amount: 100 }),
     );
   });
 
@@ -78,20 +78,25 @@ describe('create', () => {
 });
 
 describe('list', () => {
-  it('returns array from repo', async () => {
-    vi.mocked(transactionRepository.findAll).mockResolvedValue([mockTransaction]);
+  it('returns paginated result from repo', async () => {
+    const paginated = {
+      data: [mockTransaction], total: 1, page: 1, pageSize: 10, totalPages: 1,
+    }
+    vi.mocked(transactionRepository.findAll).mockResolvedValue(paginated);
     const result = await transactionService.list({});
-    expect(result).toEqual([mockTransaction]);
+    expect(result).toEqual(paginated);
   });
 
   it('passes filters to repo', async () => {
-    vi.mocked(transactionRepository.findAll).mockResolvedValue([]);
+    const paginated = { data: [], total: 0, page: 1, pageSize: 10, totalPages: 0 }
+    vi.mocked(transactionRepository.findAll).mockResolvedValue(paginated);
     await transactionService.list({ type: 'expense', category: 'food' });
     expect(transactionRepository.findAll).toHaveBeenCalledWith({ type: 'expense', category: 'food' });
   });
 
   it('passes empty filters when none provided', async () => {
-    vi.mocked(transactionRepository.findAll).mockResolvedValue([]);
+    const paginated = { data: [], total: 0, page: 1, pageSize: 10, totalPages: 0 }
+    vi.mocked(transactionRepository.findAll).mockResolvedValue(paginated);
     await transactionService.list({});
     expect(transactionRepository.findAll).toHaveBeenCalledWith({});
   });
@@ -124,10 +129,10 @@ describe('update', () => {
     expect(result).toEqual(mockTransaction);
   });
 
-  it('converts amount to cents on update', async () => {
+  it('passes amount directly on update', async () => {
     vi.mocked(transactionRepository.updateById).mockResolvedValue(mockTransaction);
     await transactionService.update('uuid-1', { amount: 50.25 });
-    expect(transactionRepository.updateById).toHaveBeenCalledWith('uuid-1', expect.objectContaining({ amountCents: 5025 }));
+    expect(transactionRepository.updateById).toHaveBeenCalledWith('uuid-1', expect.objectContaining({ amount: 50.25 }));
   });
 
   it('throws NotFoundError when not found', async () => {

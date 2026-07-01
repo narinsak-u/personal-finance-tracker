@@ -1,26 +1,42 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import { Transaction } from '@/types/transaction';
-import TransactionForm from './TransactionForm';
-import TransactionList from './TransactionList';
+import { useState, useCallback } from "react";
+import type { Transaction, PaginatedResult } from "@/types/transaction";
+import TransactionForm from "./TransactionForm";
+import TransactionList from "./TransactionList";
 
 interface Props {
-  initialTransactions: Transaction[];
+  initialTransactions: PaginatedResult<Transaction>;
 }
 
 export default function Dashboard({ initialTransactions }: Props) {
-  const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
+  const [editingTransaction, setEditingTransaction] =
+    useState<Transaction | null>(null);
+
+  const handleEdit = useCallback((t: Transaction) => {
+    setEditingTransaction(t);
+    requestAnimationFrame(() => {
+      document.getElementById("transaction-form")?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    });
+  }, []);
+
+  function handleDone() {
+    setEditingTransaction(null);
+  }
 
   return (
     <>
       <TransactionForm
+        key={editingTransaction?.id ?? "new"}
         editingTransaction={editingTransaction}
-        onDone={() => setEditingTransaction(null)}
+        onDone={handleDone}
       />
       <TransactionList
         initialTransactions={initialTransactions}
-        onEdit={setEditingTransaction}
+        onEdit={handleEdit}
       />
     </>
   );

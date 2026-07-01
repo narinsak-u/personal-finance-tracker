@@ -12,13 +12,13 @@ describe('getSummary', () => {
   it('returns assembled summary with totals and breakdown', async () => {
     vi.mocked(transactionRepository.getSummary).mockResolvedValue({
       totals: [
-        { type: 'income', totalCents: 500000 },
-        { type: 'expense', totalCents: 125075 },
+        { type: 'income', total: 5000 },
+        { type: 'expense', total: 1250 },
       ],
       byCategory: [
-        { type: 'income', category: 'salary', totalCents: 500000 },
-        { type: 'expense', category: 'food', totalCents: 40025 },
-        { type: 'expense', category: 'transport', totalCents: 85050 },
+        { type: 'income', category: 'salary', total: 5000 },
+        { type: 'expense', category: 'food', total: 400 },
+        { type: 'expense', category: 'transport', total: 850 },
       ],
     });
 
@@ -27,13 +27,13 @@ describe('getSummary', () => {
     expect(result).toEqual({
       from: '2026-01-01',
       to: '2026-12-31',
-      totalIncome: 5000.00,
-      totalExpense: 1250.75,
-      netBalance: 3749.25,
+      totalIncome: 5000,
+      totalExpense: 1250,
+      netBalance: 3750,
       byCategory: [
-        { type: 'income', category: 'salary', total: 5000.00 },
-        { type: 'expense', category: 'food', total: 400.25 },
-        { type: 'expense', category: 'transport', total: 850.50 },
+        { type: 'income', category: 'salary', total: 5000 },
+        { type: 'expense', category: 'food', total: 400 },
+        { type: 'expense', category: 'transport', total: 850 },
       ],
     });
   });
@@ -58,28 +58,28 @@ describe('getSummary', () => {
 
   it('handles only income transactions (no expenses)', async () => {
     vi.mocked(transactionRepository.getSummary).mockResolvedValue({
-      totals: [{ type: 'income', totalCents: 300000 }],
-      byCategory: [{ type: 'income', category: 'salary', totalCents: 300000 }],
+      totals: [{ type: 'income', total: 3000 }],
+      byCategory: [{ type: 'income', category: 'salary', total: 3000 }],
     });
 
     const result = await summaryService.getSummary('2026-01-01', '2026-12-31');
 
-    expect(result.totalIncome).toBe(3000.00);
+    expect(result.totalIncome).toBe(3000);
     expect(result.totalExpense).toBe(0);
-    expect(result.netBalance).toBe(3000.00);
+    expect(result.netBalance).toBe(3000);
   });
 
   it('handles only expense transactions (no income)', async () => {
     vi.mocked(transactionRepository.getSummary).mockResolvedValue({
-      totals: [{ type: 'expense', totalCents: 150000 }],
-      byCategory: [{ type: 'expense', category: 'food', totalCents: 150000 }],
+      totals: [{ type: 'expense', total: 1500 }],
+      byCategory: [{ type: 'expense', category: 'food', total: 1500 }],
     });
 
     const result = await summaryService.getSummary('2026-01-01', '2026-12-31');
 
     expect(result.totalIncome).toBe(0);
-    expect(result.totalExpense).toBe(1500.00);
-    expect(result.netBalance).toBe(-1500.00);
+    expect(result.totalExpense).toBe(1500);
+    expect(result.netBalance).toBe(-1500);
   });
 
   it('calls repo with correct date range', async () => {

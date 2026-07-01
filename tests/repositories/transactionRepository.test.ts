@@ -15,7 +15,7 @@ import {
 
 function createChainableMock<T>(resolveValue: T): any {
   const chain: any = {};
-  const methods = ['from', 'where', 'orderBy', 'groupBy', 'values', 'returning', 'set'];
+  const methods = ['from', 'where', 'orderBy', 'groupBy', 'values', 'returning', 'set', 'limit', 'offset'];
   for (const method of methods) {
     chain[method] = vi.fn(() => chain);
   }
@@ -27,7 +27,7 @@ function createChainableMock<T>(resolveValue: T): any {
 const mockRow = {
   id: 'uuid-1',
   type: 'expense' as const,
-  amountCents: 2550,
+  amount: 2550,
   category: 'food',
   date: '2026-06-30',
   note: 'lunch',
@@ -38,7 +38,7 @@ const mockRow = {
 const expectedTransaction = {
   id: 'uuid-1',
   type: 'expense',
-  amount: 25.50,
+  amount: 2550,
   category: 'food',
   date: '2026-06-30',
   note: 'lunch',
@@ -51,8 +51,8 @@ beforeEach(() => {
 });
 
 describe('rowToTransaction', () => {
-  it('converts amountCents to amount in dollars', () => {
-    expect(rowToTransaction(mockRow).amount).toBe(25.50);
+  it('returns amount directly', () => {
+    expect(rowToTransaction(mockRow).amount).toBe(2550);
   });
 
   it('converts createdAt Date to ISO string', () => {
@@ -67,12 +67,12 @@ describe('rowToTransaction', () => {
     expect(rowToTransaction({ ...mockRow, note: null }).note).toBeNull();
   });
 
-  it('converts 1 cent to 0.01 dollars', () => {
-    expect(rowToTransaction({ ...mockRow, amountCents: 1 }).amount).toBe(0.01);
+  it('returns amount as-is', () => {
+    expect(rowToTransaction({ ...mockRow, amount: 1 }).amount).toBe(1);
   });
 
-  it('converts 10000 cents to 100 dollars', () => {
-    expect(rowToTransaction({ ...mockRow, amountCents: 10000 }).amount).toBe(100);
+  it('returns large amount as-is', () => {
+    expect(rowToTransaction({ ...mockRow, amount: 10000 }).amount).toBe(10000);
   });
 });
 
@@ -80,7 +80,7 @@ describe('insert', () => {
   it('returns mapped transaction', async () => {
     vi.mocked(db.insert).mockReturnValue(createChainableMock([mockRow]) as any);
     const result = await insert({
-      type: 'expense', amountCents: 2550, category: 'food', date: '2026-06-30', note: 'lunch',
+      type: 'expense', amount: 2550, category: 'food', date: '2026-06-30', note: 'lunch',
     });
     expect(result).toEqual(expectedTransaction);
   });
@@ -88,38 +88,56 @@ describe('insert', () => {
   it('calls db.insert', async () => {
     vi.mocked(db.insert).mockReturnValue(createChainableMock([mockRow]) as any);
     await insert({
-      type: 'expense', amountCents: 2550, category: 'food', date: '2026-06-30', note: null,
+      type: 'expense', amount: 2550, category: 'food', date: '2026-06-30', note: null,
     });
     expect(db.insert).toHaveBeenCalled();
   });
 });
 
 describe('findAll', () => {
-  it('returns mapped transactions with no filters', async () => {
-    vi.mocked(db.select).mockReturnValue(createChainableMock([mockRow]) as any);
+  it('returns paginated result with no filters', async () => {
+    const countChain = createChainableMock([{ value: 1 }]);
+    const dataChain = createChainableMock([mockRow]);
+    vi.mocked(db.select).mockReturnValueOnce(countChain as any).mockReturnValueOnce(dataChain as any);
     const result = await findAll({});
-    expect(result).toEqual([expectedTransaction]);
+    expect(result.data).toEqual([expectedTransaction]);
+    expect(result.total).toBe(1);
+    expect(result.page).toBe(1);
+    expect(result.pageSize).toBe(10);
+    expect(result.totalPages).toBe(1);
   });
 
   it('calls orderBy for sorting', async () => {
-    const chain = createChainableMock([mockRow]);
-    vi.mocked(db.select).mockReturnValue(chain as any);
+    const countChain = createChainableMock([{ value: 1 }]);
+    const dataChain = createChainableMock([mockRow]);
+    vi.mocked(db.select).mockReturnValueOnce(countChain as any).mockReturnValueOnce(dataChain as any);
     await findAll({});
-    expect(chain.orderBy).toHaveBeenCalled();
+    expect(dataChain.orderBy).toHaveBeenCalled();
   });
 
   it('calls where when type filter is provided', async () => {
-    const chain = createChainableMock([mockRow]);
-    vi.mocked(db.select).mockReturnValue(chain as any);
+    const countChain = createChainableMock([{ value: 1 }]);
+    const dataChain = createChainableMock([mockRow]);
+    vi.mocked(db.select).mockReturnValueOnce(countChain as any).mockReturnValueOnce(dataChain as any);
     await findAll({ type: 'expense' });
-    expect(chain.where).toHaveBeenCalled();
+    expect(dataChain.where).toHaveBeenCalled();
   });
 
   it('calls where when all filters are provided', async () => {
-    const chain = createChainableMock([mockRow]);
-    vi.mocked(db.select).mockReturnValue(chain as any);
+    const countChain = createChainableMock([{ value: 1 }]);
+    const dataChain = createChainableMock([mockRow]);
+    vi.mocked(db.select).mockReturnValueOnce(countChain as any).mockReturnValueOnce(dataChain as any);
     await findAll({ type: 'expense', category: 'food', from: '2026-01-01', to: '2026-12-31' });
-    expect(chain.where).toHaveBeenCalled();
+    expect(dataChain.where).toHaveBeenCalled();
+  });
+
+  it('computes correct totalPages', async () => {
+    const countChain = createChainableMock([{ value: 25 }]);
+    const dataChain = createChainableMock(new Array(10).fill(mockRow));
+    vi.mocked(db.select).mockReturnValueOnce(countChain as any).mockReturnValueOnce(dataChain as any);
+    const result = await findAll({ page: 1, pageSize: 10 });
+    expect(result.total).toBe(25);
+    expect(result.totalPages).toBe(3);
   });
 });
 
@@ -140,13 +158,13 @@ describe('findById', () => {
 describe('updateById', () => {
   it('returns updated transaction when found', async () => {
     vi.mocked(db.update).mockReturnValue(createChainableMock([mockRow]) as any);
-    const result = await updateById('uuid-1', { amountCents: 5000 });
+    const result = await updateById('uuid-1', { amount: 5000 });
     expect(result).toEqual(expectedTransaction);
   });
 
   it('returns null when not found', async () => {
     vi.mocked(db.update).mockReturnValue(createChainableMock([]) as any);
-    const result = await updateById('nonexistent', { amountCents: 5000 });
+    const result = await updateById('nonexistent', { amount: 5000 });
     expect(result).toBeNull();
   });
 });
@@ -167,11 +185,11 @@ describe('deleteById', () => {
 
 describe('getSummary', () => {
   it('returns totals and breakdown', async () => {
-    const totalsData = [{ type: 'income', totalCents: 500000 }, { type: 'expense', totalCents: 125075 }];
+    const totalsData = [{ type: 'income', total: 500000 }, { type: 'expense', total: 125075 }];
     const breakdownData = [
-      { type: 'income' as const, category: 'salary', totalCents: 500000 },
-      { type: 'expense' as const, category: 'food', totalCents: 40025 },
-      { type: 'expense' as const, category: 'transport', totalCents: 85050 },
+      { type: 'income' as const, category: 'salary', total: 500000 },
+      { type: 'expense' as const, category: 'food', total: 40025 },
+      { type: 'expense' as const, category: 'transport', total: 85050 },
     ];
     vi.mocked(db.select)
       .mockReturnValueOnce(createChainableMock(totalsData) as any)

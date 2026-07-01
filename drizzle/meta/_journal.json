@@ -8,6 +8,20 @@
       "when": 1782821838814,
       "tag": "0000_elite_raider",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1782836338905,
+      "tag": "0001_sour_rafael_vega",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1782841675094,
+      "tag": "0002_clean_lord_tyger",
+      "breakpoints": true
     }
   ]
 }

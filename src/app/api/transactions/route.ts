@@ -1,19 +1,27 @@
-import { NextRequest, NextResponse } from 'next/server';
-import * as transactionService from '@/services/transactionService';
-import { handleError } from '@/lib/http';
-import { TransactionFilters } from '@/types/transaction';
+// Route handler:
+// - GET /api/transactions (list with optional filters + pagination)
+// - POST /api/transactions (create)
+import { NextRequest, NextResponse } from "next/server";
+import * as transactionService from "@/services/transactionService";
+import { handleError } from "@/lib/http";
+import type { TransactionFilters } from "@/types/transaction";
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
+    const page = searchParams.get("page");
+    const pageSize = searchParams.get("pageSize");
     const filters = {
-      type: searchParams.get('type') || undefined,
-      category: searchParams.get('category') || undefined,
-      from: searchParams.get('from') || undefined,
-      to: searchParams.get('to') || undefined,
+      type: searchParams.get("type") || undefined,
+      category: searchParams.get("category") || undefined,
+      from: searchParams.get("from") || undefined,
+      to: searchParams.get("to") || undefined,
+      page: page ? Number(page) : undefined,
+      pageSize: pageSize ? Number(pageSize) : undefined,
     } as TransactionFilters;
-    const transactions = await transactionService.list(filters);
-    return NextResponse.json(transactions);
+
+    const result = await transactionService.list(filters);
+    return NextResponse.json(result);
   } catch (e) {
     return handleError(e);
   }

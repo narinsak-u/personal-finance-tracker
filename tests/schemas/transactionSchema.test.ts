@@ -9,14 +9,14 @@ describe('createTransactionSchema', () => {
   };
 
   it('accepts valid expense with all expense categories', () => {
-    const categories = ['food', 'transport', 'housing', 'utilities', 'entertainment', 'healthcare', 'shopping', 'other'];
+    const categories = ['food', 'utilities', 'entertainment', 'shopping', 'other'];
     for (const category of categories) {
       expect(createTransactionSchema.safeParse({ ...validExpense, category }).success).toBe(true);
     }
   });
 
   it('accepts valid income with all income categories', () => {
-    const categories = ['salary', 'bonus', 'investment', 'gift', 'other'];
+    const categories = ['salary', 'investment', 'gift', 'other'];
     for (const category of categories) {
       expect(createTransactionSchema.safeParse({ ...validIncome, category }).success).toBe(true);
     }

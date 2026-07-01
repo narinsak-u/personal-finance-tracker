@@ -1,16 +1,17 @@
-export const EXPENSE_CATEGORIES = [
-  'food', 'transport', 'housing', 'utilities',
-  'entertainment', 'healthcare', 'shopping', 'other',
-] as const;
+import type {
+  ExpenseCategory,
+  IncomeCategory,
+  Category,
+} from "@/lib/categories";
 
-export const INCOME_CATEGORIES = [
-  'salary', 'bonus', 'investment', 'gift', 'other',
-] as const;
+export type TransactionType = "income" | "expense";
+export type { ExpenseCategory, IncomeCategory, Category };
 
-export type TransactionType = 'income' | 'expense';
-export type ExpenseCategory = typeof EXPENSE_CATEGORIES[number];
-export type IncomeCategory = typeof INCOME_CATEGORIES[number];
-export type Category = ExpenseCategory | IncomeCategory;
+import {
+  EXPENSE_CATEGORIES,
+  INCOME_CATEGORIES,
+} from "@/lib/categories";
+export { EXPENSE_CATEGORIES, INCOME_CATEGORIES };
 
 export interface Transaction {
   id: string;
@@ -44,6 +45,16 @@ export interface TransactionFilters {
   category?: Category;
   from?: string;
   to?: string;
+  page?: number;
+  pageSize?: number;
+}
+
+export interface PaginatedResult<T> {
+  data: T[]
+  total: number
+  page: number
+  pageSize: number
+  totalPages: number
 }
 
 export interface SummaryResponse {
