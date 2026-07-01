@@ -193,12 +193,7 @@ Defined in `src/lib/categories.ts` (single source of truth):
 ```bash
 cd personal-finance-tracker
 cp .env.example .env
-docker compose up --build
-
-# In another terminal, run migrations
-docker compose exec app node scripts/migrate.mjs
-
-# Open http://localhost:3000
+docker compose up --build          # runs migrate + seed (if empty) + app
 ```
 
 ### Local Development
@@ -208,6 +203,7 @@ npm install
 docker compose up postgres -d     # or use local PostgreSQL
 cp .env.example .env
 npm run db:push                    # push schema (dev only)
+npm run db:seed                    # seed sample data (skips if already seeded)
 npm run dev                        # starts with webpack (Turbopack has a Windows CSS bug)
 ```
 
@@ -224,6 +220,7 @@ npm run dev                        # starts with webpack (Turbopack has a Window
 | `npm run test:coverage` | Run Vitest with coverage |
 | `npm run db:generate` | Generate Drizzle migration files |
 | `npm run db:migrate` | Run pending migrations |
+| `npm run db:seed` | Seed sample data (auto-skips if DB has data) |
 | `npm run db:push` | Push schema directly (dev only) |
 
 ### Running a Single Test
